@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>決算書作成アプリ</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f9;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #fff;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        h1, h2 {
+            color: #333;
+            text-align: center;
+        }
+        form {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        form div {
+            flex: 1 1 45%;
+            display: flex;
+            align-items: center;
+        }
+        label {
+            margin-right: 10px;
+            white-space: nowrap;
+        }
+        input[type="text"],
+        input[type="number"] {
+            width: 100%;
+            padding: 8px;
+            box-sizing: border-box;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        button {
+            padding: 10px;
+            background-color: #28a745;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #218838;
+        }
+        .reset-button {
+            background-color: #dc3545;
+        }
+        .reset-button:hover {
+            background-color: #c82333;
+        }
+        .download-button {
+            background-color: #007bff;
+        }
+        .download-button:hover {
+            background-color: #0056b3;
+        }
+        .upload-button {
+            background-color: #17a2b8;
+        }
+        .upload-button:hover {
+            background-color: #138496;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+        table, th, td {
+            border: 1px solid #ccc;
+        }
+        th, td {
+            padding: 10px;
+            text-align: left;
+            cursor: pointer;
+        }
+        th {
+            background-color: #f8f9fa;
+        }
+        .category-table {
+            margin-bottom: 30px;
+        }
+        .category-table th, .category-table td {
+            text-align: right;
+        }
+        .category-table th {
+            background-color: #e9ecef;
+        }
+        ul {
+            list-style-type: none;
+            padding: 0;
+        }
+        ul li {
+            background-color: #e9ecef;
+            margin: 5px 0;
+            padding: 10px;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>決算書作成アプリ</h1>
+        <form id="inputForm">
+            <div>
+                <label for="item">品物:</label>
+                <input type="text" id="item" name="item" required>
+            </div>
+            <div>
+                <label for="category">カテゴリ:</label>
+                <input type="text" id="category" name="category" required>
+            </div>
+            <div>
+                <label for="unitPrice">単価:</label>
+                <input type="number" id="unitPrice" name="unitPrice" required>
+            </div>
+            <div>
+                <label for="quantity">個数:</label>
+                <input type="number" id="quantity" name="quantity" required>
+            </div>
+            <button type="submit">追加</button>
+            <button type="button" class="reset-button" onclick="resetForm()">リセット</button>
+        </form>
+
+        <h2>決算書</h2>
+        <table id="ledgerTable">
+            <thead>
+                <tr>
+                    <th onclick="sortTable(0)">品物</th>
+                    <th onclick="sortTable(1)">カテゴリ</th>
+                    <th onclick="sortTable(2)">単価 (円)</th>
+                    <th onclick="sortTable(3)">個数</th>
+                    <th onclick="sortTable(4)">金額 (円)</th>
+                </tr>
+            </thead>
+            <tbody>
+            </tbody>
+        </table>
+
+        <h2>合計金額: <span id="totalAmount">0</span> 円</h2>
+        <h2>カテゴリ別合計金額:</h2>
+        <div id="categoryTables"></div>
+
+        <button type="button" class="download-button" onclick="downloadExcel()">Excelにダウンロード</button>
+        <br><br>
+        <input type="file" id="uploadFile" accept=".xlsx, .xls" />
+        <button type="button" class="upload-button" onclick="uploadExcel()">Excelをアップロード</button>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script>
+        let totalAmount = 0;
+        const categoryTotals = {};
+
+        document.getElementById('inputForm').addEventListener('submit', function(event) {
+            event.preventDefault();
+            
+            const item = document.getElementById('item').value;
+            const category = document.getElementById('category').value;
+            const unitPrice = parseFloat(document.getElementById('unitPrice').value);
+            const quantity = parseInt(document.getElementById('quantity').value);
+            const amount = unitPrice * quantity;
+
+            let existingRow = null;
+            const rows = document.getElementById('ledgerTable').getElementsByTagName('tbody')[0].rows;
+            for (let i = 0; i < rows.length; i++) {
+                if (rows[i].cells[0].innerText === item &&
+                    rows[i].cells[1].innerText === category &&
+                    parseFloat(rows[i].cells[2].innerText) === unitPrice) {
+                    existingRow = rows[i];
+                    break;
+                }
+            }
+
+            if (existingRow) {
+                const existingQuantity = parseInt(existingRow.cells[3].innerText);
+                const existingAmount = parseFloat(existingRow.cells[4].innerText);
+                const newQuantity = existingQuantity + quantity;
+                const newAmount = existingAmount + amount;
+                existingRow.cells[4].innerText = Math.round(newAmount);
+                existingRow.cells[3].innerText = newQuantity;
+
+                totalAmount += amount;
+            } else {
+                const table = document.getElementById('ledgerTable').getElementsByTagName('tbody')[0];
+                const newRow = table.insertRow();
+                newRow.insertCell(0).innerText = item;
+                newRow.insertCell(1).innerText = category;
+                newRow.insertCell(2).innerText = Math.round(unitPrice);
+                newRow.insertCell(3).innerText = quantity;
+                newRow.insertCell(4).innerText = Math.round(amount);
+
+                totalAmount += amount;
+            }
+            document.getElementById('totalAmount').innerText = Math.round(totalAmount);
+
+            if (!categoryTotals[category]) {
+                categoryTotals[category] = 0;
+            }
+            categoryTotals[category] += amount;
+
+            updateCategoryTables();
+            document.getElementById('inputForm').reset();
+        });
+
+        function updateCategoryTables() {
+            const categoryTablesElement = document.getElementById('categoryTables');
+            categoryTablesElement.innerHTML = '';
+            
+            for (const category in categoryTotals) {
+                const table = document.createElement('table');
+                table.className = 'category-table';
+                
+                const thead = document.createElement('thead');
+                const headerRow = document.createElement('tr');
+                headerRow.innerHTML = '<th>品物</th><th>単価 (円)</th><th>個数</th><th>金額 (円)</th>';
+                thead.appendChild(headerRow);
+                table.appendChild(thead);
+                
+                const tbody = document.createElement('tbody');
+                const categoryRows = [];
+                let categoryTotal = 0;
+                
+                const rows = document.getElementById('ledgerTable').getElementsByTagName('tbody')[0].rows;
+                for (let i = 0; i < rows.length; i++) {
+                    if (rows[i].cells[1].innerText === category) {
+                        categoryRows.push(rows[i]);
+                        categoryTotal += parseFloat(rows[i].cells[4].innerText);
+                    }
+                }
+                
+                categoryRows.forEach(row => {
+                    const newRow = tbody.insertRow();
+                    newRow.insertCell(0).innerText = row.cells[0].innerText;
+                    newRow.insertCell(1).innerText = row.cells[2].innerText;
+                    newRow.insertCell(2).innerText = row.cells[3].innerText;
+                    newRow.insertCell(3).innerText = row.cells[4].innerText;
+                });
+                
+                const footerRow = tbody.insertRow();
+                footerRow.innerHTML = `<td colspan="3">合計</td><td>${Math.round(categoryTotal)}</td>`;
+                
+                table.appendChild(tbody);
+                categoryTablesElement.appendChild(table);
+            }
+        }
+
+        function resetForm() {
+            document.getElementById('inputForm').reset();
+            totalAmount = 0;
+            document.getElementById('totalAmount').innerText = '0';
+            document.getElementById('categoryTables').innerHTML = '';
+            const tableBody = document.getElementById('ledgerTable').getElementsByTagName('tbody')[0];
+            while (tableBody.rows.length > 0) {
+                tableBody.deleteRow(0);
+            }
+        }
+
+        function sortTable(columnIndex) {
+            const table = document.getElementById('ledgerTable');
+            const tbody = table.getElementsByTagName('tbody')[0];
+            const rows = Array.from(tbody.getElementsByTagName('tr'));
+            const isAscending = tbody.getAttribute('data-sort') === 'asc';
+            
+            rows.sort((rowA, rowB) => {
+                const cellA = rowA.getElementsByTagName('td')[columnIndex].innerText;
+                const cellB = rowB.getElementsByTagName('td')[columnIndex].innerText;
+                
+                let valueA, valueB;
+                if (columnIndex === 2 || columnIndex === 3 || columnIndex === 4) {
+                    valueA = parseInt(cellA.replace(/,/g, ''));
+                    valueB = parseInt(cellB.replace(/,/g, ''));
+                } else {
+                    valueA = cellA.toLowerCase();
+                    valueB = cellB.toLowerCase();
+                }
+                
+                if (valueA < valueB) return isAscending ? -1 : 1;
+                if (valueA > valueB) return isAscending ? 1 : -1;
+                return 0;
+            });
+            
+            rows.forEach(row => tbody.appendChild(row));
+            tbody.setAttribute('data-sort', isAscending ? 'desc' : 'asc');
+        }
+
+        function downloadExcel() {
+            const workbook = XLSX.utils.book_new();
+            const ledgerTable = document.getElementById('ledgerTable');
+            const ws = XLSX.utils.table_to_sheet(ledgerTable);
+            XLSX.utils.book_append_sheet(workbook, ws, '決算書');
+            
+            const categoryTables = document.getElementById('categoryTables');
+            const sheets = [];
+            Array.from(categoryTables.getElementsByTagName('table')).forEach((table, index) => {
+                const sheet = XLSX.utils.table_to_sheet(table);
+                sheets.push({ name: `カテゴリ_${index + 1}`, sheet });
+            });
+            
+            sheets.forEach(sheet => {
+                XLSX.utils.book_append_sheet(workbook, sheet.sheet, sheet.name);
+            });
+
+            XLSX.writeFile(workbook, '決算書.xlsx');
+        }
+
+        function uploadExcel() {
+            const file = document.getElementById('uploadFile').files[0];
+            if (!file) {
+                alert('ファイルを選択してください。');
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                const data = new Uint8Array(event.target.result);
+                const workbook = XLSX.read(data, { type: 'array' });
+                
+                const sheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[sheetName];
+                const json = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+
+                totalAmount = 0;
+                Object.keys(categoryTotals).forEach(category => {
+                    categoryTotals[category] = 0;
+                });
+
+                const tableBody = document.getElementById('ledgerTable').getElementsByTagName('tbody')[0];
+                while (tableBody.rows.length > 0) {
+                    tableBody.deleteRow(0);
+                }
+
+                json.forEach((row, index) => {
+                    if (index === 0) return; // ヘッダー行をスキップ
+                    const [item, category, unitPrice, quantity, amount] = row;
+                    if (item && category && unitPrice && quantity && amount) {
+                        const amountNum = Math.round(parseFloat(amount));
+                        const unitPriceNum = Math.round(parseFloat(unitPrice));
+                        const quantityNum = parseInt(quantity);
+
+                        let existingRow = null;
+                        const rows = tableBody.getElementsByTagName('tr');
+                        for (let i = 0; i < rows.length; i++) {
+                            if (rows[i].cells[0].innerText === item &&
+                                rows[i].cells[1].innerText === category &&
+                                parseFloat(rows[i].cells[2].innerText) === unitPriceNum) {
+                                existingRow = rows[i];
+                                break;
+                            }
+                        }
+
+                        if (existingRow) {
+                            const existingQuantity = parseInt(existingRow.cells[3].innerText);
+                            const newQuantity = existingQuantity + quantityNum;
+                            const newAmount = parseFloat(existingRow.cells[4].innerText) + amountNum;
+                            existingRow.cells[4].innerText = Math.round(newAmount);
+                            existingRow.cells[3].innerText = newQuantity;
+
+                            totalAmount += amountNum;
+                        } else {
+                            const newRow = tableBody.insertRow();
+                            newRow.insertCell(0).innerText = item;
+                            newRow.insertCell(1).innerText = category;
+                            newRow.insertCell(2).innerText = Math.round(unitPriceNum);
+                            newRow.insertCell(3).innerText = quantityNum;
+                            newRow.insertCell(4).innerText = Math.round(amountNum);
+
+                            totalAmount += amountNum;
+                        }
+
+                        if (!categoryTotals[category]) {
+                            categoryTotals[category] = 0;
+                        }
+                        categoryTotals[category] += amountNum;
+                    }
+                });
+
+                document.getElementById('totalAmount').innerText = Math.round(totalAmount);
+                updateCategoryTables();
+            };
+            reader.readAsArrayBuffer(file);
+        }
+    </script>
+</body>
+</html>
